@@ -2,12 +2,12 @@
 
 **Group number:** 13
 
-| Name                  | ID        |College e-mail                       |
-|-----------------------|-----------|-------------------------------------|
-| Lior Shor             | 212272793 | Lior.Shor@e.braude.ac.il            |
-| Guy Gabi Kikozashvili | 324096403 | Guy.Gabi.Kikozashvil@e.braude.ac.il |
-| Amir Kosover          | 212131296 | Amir.Kosover@e.braude.ac.il         |
-| Osher Amsalem         | 212393748 | Osher.Amsalem@e.braude.ac.il        |
+| Name                   | College e-mail                      |
+|----------------------- |-------------------------------------|
+| Lior Shor              | Lior.Shor@e.braude.ac.il            |
+| Guy Gabi Kikozashvili  | Guy.Gabi.Kikozashvil@e.braude.ac.il |
+| Amir Kosover           | Amir.Kosover@e.braude.ac.il         |
+| Osher Amsalem          | Osher.Amsalem@e.braude.ac.il        |
 
 ---
 
