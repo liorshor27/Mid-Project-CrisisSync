@@ -77,7 +77,7 @@ Page references (p.N) refer to the project story.
 | UC-04 | Generate Monthly SLA Report | Scheduler (timer) |
 | UC-05 | Generate SLA Report On Demand | System Administrator |
 | UC-06 | View SLA Report | System Administrator |
-| UC-07 | Log In (`<<include>>` from UC-01, UC-03, UC-05, UC-06) | All human users |
+| UC-07 | Log In (precondition of UC-01, UC-03, UC-05, UC-06) | All human users |
 
 ### 4.2 Matrix
 
