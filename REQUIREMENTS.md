@@ -54,15 +54,30 @@ Page references (p.N) refer to the project story.
 
 ## 3. Non-Functional Requirements (NFR)
 
+### 3.1 Operation 1 – Resource package reservation and task completion
+
 | ID | Category | Requirement | Source |
 |----|----------|-------------|--------|
-| **NFR-01** | Reliability | When two Dispatchers attempt to reserve the same resource concurrently, exactly one reservation shall succeed in 100% of 100 repeated concurrent trials, and no partially reserved package shall remain in the database after a failed reservation (full rollback). | p.2, p.5 |
-| **NFR-02** | Performance | A resource package reservation (manual or automatic, including up to 2 fallback attempts) shall complete within **2 seconds** for at least 95% of requests, with 10 client stations working concurrently. | p.3, p.4 |
-| **NFR-03** | Performance | A change in a task state or resource status shall be pushed by the server (no client polling) and displayed on all relevant open client stations within **1 second**. | p.3 |
-| **NFR-04** | Security | User passwords shall be stored only as **bcrypt** hashes with a cost factor of at least **10**. Any completion report or report-view request from a user without the required role shall be rejected in 100% of attempts. | p.1 |
-| **NFR-05** | Usability | The Dispatcher shall be able to complete a manual reservation from the event status screen in no more than **3** user actions (clicks or key presses), and an error message after a failed reservation shall appear within **1 second**. | p.2, p.4 |
-| **NFR-06** | Performance | Generating a monthly SLA report over up to **5,000** events shall complete within **10 seconds**. | p.4 |
+| *NFR-01* | Reliability | A reservation or completion that the server has confirmed to the client shall survive a server crash: after a server restart, *100%* of confirmed reservations and completions shall be present in the database, and no package shall be partially reserved. Client stations shall reconnect automatically and reload the current state within *10 seconds* after the server is back online. | p.2, p.4 |
+| *NFR-02* | Performance | A resource package reservation (manual or automatic, including up to 2 fallback attempts) shall complete within *2 seconds* for at least 95% of requests, with 10 client stations working concurrently. | p.3, p.4 |
+| *NFR-03* | Performance | A change in a task state or resource status shall be pushed by the server (no client polling) and displayed on all relevant open client stations within *1 second*. | p.3 |
+| *NFR-04* | Security | All client–server communication (reservation, completion and status updates) shall be encrypted with *TLS 1.2 or higher. A session with no user activity for **15 minutes* shall be closed automatically and require a new login. | p.1, p.4 |
+| *NFR-05* | Usability | A trained Dispatcher shall complete a manual reservation of a 4-resource package, starting from the event status screen, within *30 seconds* on average over 10 trials, and an automatic allocation request in no more than *3* user actions. | p.4 |
 
+### 3.2 Operation 2 – SLA report
+
+| ID | Category | Requirement | Source |
+|----|----------|-------------|--------|
+| *NFR-06* | Performance | Generating a monthly SLA report over up to *5,000* events shall complete within *10 seconds*. | p.4 |
+| *NFR-07* | Reliability | If the server is down when the month ends, the missed automatic SLA report shall be generated within *5 minutes* after the server restarts. A generated report shall never be lost or partially stored (100% of runs). | p.4, p.5 |
+| *NFR-08* | Security | Generated SLA reports shall be stored read-only: *0* modifications to a stored report shall be possible through the client application, and report data shall be transmitted only over *TLS 1.2 or higher*. | p.4 |
+| *NFR-09* | Usability | The System Administrator shall open the SLA report of any past month in no more than *3* user actions from the main screen, and average times shall be displayed in a uniform *hh:mm* format. | p.4, p.5 |
+
+### 3.3 Both operations
+
+| ID | Category | Requirement | Source |
+|----|----------|-------------|--------|
+| *NFR-10* | Security | User passwords shall be stored only as *bcrypt* hashes with a cost factor of at least *10*; plain-text passwords shall never be stored or logged. | p.1 |
 ---
 
 ## 4. Requirements Traceability Matrix (RTM)
