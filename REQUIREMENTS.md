@@ -92,7 +92,7 @@ Page references (p.N) refer to the project story.
 | UC-04 | Generate Monthly SLA Report | Scheduler (timer) |
 | UC-05 | Generate SLA Report On Demand | System Administrator |
 | UC-06 | View SLA Report | System Administrator |
-| UC-07 | Log In (precondition of UC-01, UC-03, UC-05, UC-06) | All human users |
+| UC-07 | Log In (precondition of UC-01, UC-03, UC-05, UC-06) | User (generalization of all human actors) |
 
 ### 4.2 Matrix
 
@@ -130,12 +130,12 @@ Page references (p.N) refer to the project story.
 **AT-01 – Successful manual reservation (happy path)** — FR-01, FR-03, FR-07
 ```gherkin
 Given the Dispatcher is logged in
-  And task "Debris Removal" is in the Ready state
-  And its package (Field Commander, Heavy Equipment Operator, Bulldozer, Paramedic) is fully Available
+And task "Debris Removal" is in the Ready state
+And its package (Field Commander, Heavy Equipment Operator, Bulldozer, Paramedic) is fully Available
 When the Dispatcher reserves the package for "Debris Removal"
 Then all four resources are set to Reserved
-  And the task "Debris Removal" moves to the Active state
-  And the audit log contains the reservation with the time and the Dispatcher's username
+And the task "Debris Removal" moves to the Active state
+And the audit log contains the reservation with the time and the Dispatcher's username
 ```
 
 **AT-02 – Reservation rejected for a Blocked task (error)** — FR-01
@@ -143,59 +143,59 @@ Then all four resources are set to Reserved
 Given task "Structural Shoring" is in the Blocked state with an open prerequisite task
 When the Dispatcher tries to reserve its package
 Then the system rejects the reservation with the message "Task is not Ready"
-  And no resource changes its status
-  And the task remains in the Blocked state
+And no resource changes its status
+And the task remains in the Blocked state
 ```
 
 **AT-03 – One resource unavailable, full rollback (error and recovery)** — FR-02
 ```gherkin
 Given task "Debris Removal" is in the Ready state
-  And the bulldozer in its package has status Faulty/In Maintenance
+And the bulldozer in its package has status Faulty/In Maintenance
 When the Dispatcher reserves the package
 Then the reservation fails and no resource in the package is Reserved
-  And the task remains in the Ready state
-  And the Dispatcher sees a message naming the bulldozer as unavailable
-  And the Dispatcher's screen shows the current resource statuses
+And the task remains in the Ready state
+And the Dispatcher sees a message naming the bulldozer as unavailable
+And the Dispatcher's screen shows the current resource statuses
 ```
 
 **AT-04 – Automatic allocation with fallback (happy path with conflict)** — FR-04
 ```gherkin
 Given events in Haifa and Tel Aviv each have a Ready task that needs a bulldozer
-  And bulldozers B1 and B2 are Available and B1 is the nearest to both events
+And bulldozers B1 and B2 are Available and B1 is the nearest to both events
 When both Dispatchers request automatic allocation by "nearest location" at the same moment
 Then exactly one task receives B1
-  And the other task automatically receives B2 without the Dispatcher repeating the request
-  And both tasks move to the Active state
+And the other task automatically receives B2 without the Dispatcher repeating the request
+And both tasks move to the Active state
 ```
 
 **AT-05 – Automatic allocation fails when no alternative is left (error)** — FR-04
 ```gherkin
 Given a Ready task needs a bulldozer
-  And no bulldozer is Available after 2 alternative attempts
+And no bulldozer is Available after 2 alternative attempts
 When the Dispatcher requests automatic allocation
 Then the allocation fails and no resource is reserved
-  And the task remains in the Ready state
-  And the Dispatcher is notified that no available alternative exists
+And the task remains in the Ready state
+And the Dispatcher is notified that no available alternative exists
 ```
 
 **AT-06 – Assigned Field Commander reports completion (happy path)** — FR-05, FR-06, FR-07
 ```gherkin
 Given task "Debris Removal" is Active and its assigned Field Commander is logged in
-  And task "Search and Rescue" depends only on "Debris Removal"
+And task "Search and Rescue" depends only on "Debris Removal"
 When the Field Commander reports completion of "Debris Removal"
 Then "Debris Removal" moves to the Completed state
-  And all its resources return to Available
-  And "Search and Rescue" moves from Blocked to Ready
-  And the audit log records the transition with the time and the Field Commander's username
+And all its resources return to Available
+And "Search and Rescue" moves from Blocked to Ready
+And the audit log records the transition with the time and the Field Commander's username
 ```
 
-**AT-07 – Completion by a non-assigned Field Commander is rejected (error)** — FR-05, NFR-04
+**AT-07 – Completion by a non-assigned Field Commander is rejected (error)** — FR-05
 ```gherkin
 Given task "Debris Removal" is Active with Field Commander "FC-A" assigned
-  And Field Commander "FC-B" is logged in
+And Field Commander "FC-B" is logged in
 When "FC-B" tries to report completion of "Debris Removal"
 Then the system rejects the request with an authorization error
-  And the task remains Active and its resources remain Reserved
+And the task remains Active and its resources remain Reserved
 ```
 
 ### Operation 2 – SLA report
@@ -203,16 +203,16 @@ Then the system rejects the request with an authorization error
 **AT-08 – Automatic monthly SLA report (happy path)** — FR-08, FR-09
 ```gherkin
 Given during October two "Fire" events were closed after 2 h and 4 h
-  And one "Road Accident" event was closed after 1 h
+And one "Road Accident" event was closed after 1 h
 When the system clock reaches the end of October
 Then the system generates the October SLA report automatically
-  And the report shows an average of 3 h for "Fire" and 1 h for "Road Accident"
+And the report shows an average of 3 h for "Fire" and 1 h for "Road Accident"
 ```
 
 **AT-09 – On-demand report for a past month (happy path)** — FR-10
 ```gherkin
 Given the System Administrator is logged in
-  And events were closed during August
+And events were closed during August
 When the Administrator requests the SLA report for August
 Then the system displays the August SLA report grouped by event type
 ```
@@ -226,24 +226,24 @@ When the Administrator requests a past month with no closed events
 Then the system displays an empty report with the message "No closed events in this month"
 ```
 
-**AT-11 – Report access is restricted to the Administrator (security)** — FR-11, NFR-04
+**AT-11 – Report access is restricted to the Administrator (security)** — FR-11
 ```gherkin
 Given a Dispatcher is logged in
 When the Dispatcher tries to open an SLA report
 Then the system denies access
-  And no report data is sent to the Dispatcher's station
+And no report data is sent to the Dispatcher's station
 ```
 
 ### Non-functional tests
 
-**AT-12 – Concurrent reservation of the same resource (reliability)** — NFR-01
+**AT-12 – Concurrent reservation of the same resource (reliability)** — FR-12
 ```gherkin
 Given bulldozer B1 is Available
-  And two Dispatcher stations each have a Ready task whose package includes B1
+And two Dispatcher stations each have a Ready task whose package includes B1
 When both Dispatchers reserve their packages at the same moment, repeated 100 times
 Then in every trial exactly one reservation succeeds
-  And the failed reservation leaves none of its package resources Reserved
-  And the failing Dispatcher receives a clear message and an updated screen
+And the failed reservation leaves none of its package resources Reserved
+And the failing Dispatcher receives a clear message and an updated screen
 ```
 
 **AT-13 – Reservation response time (performance)** — NFR-02
@@ -258,24 +258,25 @@ Then at least 95% of the reservations complete within 2 seconds
 Given three client stations show the status screen of the same event
 When a task in that event changes from Active to Completed
 Then all three stations show the new state within 1 second
-  And no station sent a polling request for the change
+And no station sent a polling request for the change
 ```
 
-**AT-15 – Passwords are stored hashed (security)** — NFR-04
+**AT-15 – Passwords are stored hashed (security)** — NFR-10
 ```gherkin
 Given a new user account is created with a password
 When the users table is inspected in the database
 Then the stored value is a bcrypt hash with cost factor of at least 10
-  And the plain-text password does not appear in the database
+And the plain-text password does not appear in the database
 ```
 
-**AT-16 – Reservation in few actions (usability)** — NFR-05
+**AT-16 – Reservation efficiency (usability)** — NFR-05
 ```gherkin
-Given the Dispatcher is on the status screen of an open event with a Ready task
-When the Dispatcher performs a manual reservation of the task's package
-Then the reservation is completed in no more than 3 user actions
-When a reservation fails
-Then the error message appears within 1 second
+Given a trained Dispatcher is on the status screen of an open event with a Ready task
+And the task's package contains 4 resources
+When the Dispatcher performs a manual reservation 10 times
+Then the average completion time is at most 30 seconds
+When the Dispatcher requests automatic allocation for a Ready task
+Then the request is submitted in no more than 3 user actions
 ```
 
 **AT-17 – SLA report generation time (performance)** — NFR-06
@@ -284,4 +285,42 @@ Given the database contains 5,000 events closed in the selected month
 When the System Administrator generates the SLA report for that month
 Then the report is displayed within 10 seconds
 ```
-
+**AT-18 – Confirmed reservation survives server crash (reliability)** — NFR-01
+```gherkin
+Given the Dispatcher received a confirmation for reserving the package of "Debris Removal"
+When the server process is killed and restarted
+Then all resources of "Debris Removal" are still Reserved and the task is Active
+And no package in the database is partially reserved
+And every connected client station reconnects and shows the current state within 10 seconds
+```
+**AT-19 – Session timeout and login lockout (security)** — NFR-04
+```gherkin
+Given a Dispatcher is logged in
+When the Dispatcher performs no action for 15 minutes
+Then the session is closed and the next action requires a new login
+Given a user enters a wrong password 5 times in a row
+When the user tries to log in again with the correct password within 15 minutes
+Then the login is rejected with the message "Account locked – try again later"
+And after 15 minutes the user can log in successfully
+```
+**AT-20 – Missed monthly report is recovered (reliability)** — NFR-07
+```gherkin
+Given the server is down at the end of October
+When the server restarts on November 1st
+Then the October SLA report is generated within 5 minutes after the restart
+```
+**AT-21 – Stored report is read-only (security)** — NFR-08
+```gherkin
+Given the October SLA report has been generated
+When the System Administrator opens the report
+Then no edit or delete action is available
+When a modify or delete request for the stored report is sent from the client
+Then the server rejects the request and the stored report values remain unchanged
+```
+**AT-22 – Report is quick to open (usability)** — NFR-09
+```gherkin
+Given the System Administrator is on the main screen
+When the Administrator opens the SLA report of a past month
+Then the report is displayed after no more than 3 user actions
+And all average times are shown in hh:mm format
+```
