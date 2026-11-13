@@ -61,7 +61,7 @@ Page references (p.N) refer to the project story.
 | *NFR-01* | Reliability | A reservation or completion that the server has confirmed to the client shall survive a server crash: after a server restart, *100%* of confirmed reservations and completions shall be present in the database, and no package shall be partially reserved. Client stations shall reconnect automatically and reload the current state within *10 seconds* after the server is back online. | p.2, p.4 |
 | *NFR-02* | Performance | A resource package reservation (manual or automatic, including up to 2 fallback attempts) shall complete within *2 seconds* for at least 95% of requests, with 10 client stations working concurrently. | p.3, p.4 |
 | *NFR-03* | Performance | A change in a task state or resource status shall be pushed by the server (no client polling) and displayed on all relevant open client stations within *1 second*. | p.3 |
-| *NFR-04* | Security | All client–server communication (reservation, completion and status updates) shall be encrypted with *TLS 1.2 or higher. A session with no user activity for **15 minutes* shall be closed automatically and require a new login. | p.1, p.4 |
+| *NFR-04* | Security | A session with no user activity for **15 minutes** shall be closed automatically and require a new login. After **5** consecutive failed login attempts, the account shall be locked for **15 minutes**. | p.1 |
 | *NFR-05* | Usability | A trained Dispatcher shall complete a manual reservation of a 4-resource package, starting from the event status screen, within *30 seconds* on average over 10 trials, and an automatic allocation request in no more than *3* user actions. | p.4 |
 
 ### 3.2 Operation 2 – SLA report
@@ -70,7 +70,7 @@ Page references (p.N) refer to the project story.
 |----|----------|-------------|--------|
 | *NFR-06* | Performance | Generating a monthly SLA report over up to *5,000* events shall complete within *10 seconds*. | p.4 |
 | *NFR-07* | Reliability | If the server is down when the month ends, the missed automatic SLA report shall be generated within *5 minutes* after the server restarts. A generated report shall never be lost or partially stored (100% of runs). | p.4, p.5 |
-| *NFR-08* | Security | Generated SLA reports shall be stored read-only: *0* modifications to a stored report shall be possible through the client application, and report data shall be transmitted only over *TLS 1.2 or higher*. | p.4 |
+| *NFR-08* | Security | Generated SLA reports shall be stored read-only: **100%** of attempts to modify or delete a stored report through the client application shall be rejected. | p.4 |
 | *NFR-09* | Usability | The System Administrator shall open the SLA report of any past month in no more than *3* user actions from the main screen, and average times shall be displayed in a uniform *hh:mm* format. | p.4, p.5 |
 
 ### 3.3 Both operations
@@ -109,12 +109,17 @@ Page references (p.N) refer to the project story.
 | FR-09 | Average time per event type | p.4 | UC-04, UC-05 | AT-08 |
 | FR-10 | On-demand report for a past month | p.5 | UC-05 | AT-09, AT-10 |
 | FR-11 | Only Administrator views reports | p.1, p.4 | UC-06 | AT-11 |
-| NFR-01 | Concurrent reservation, exactly one succeeds | p.2, p.5 | UC-01 | AT-12 |
+| FR-12 | Concurrent reservation, exactly one succeeds | p.2 | UC-01, UC-02 | AT-12 |
+| NFR-01 | Confirmed operations survive server crash, reconnect ≤ 10 s | p.2, p.4 | UC-01, UC-03 | AT-18 |
 | NFR-02 | Reservation ≤ 2 s (95%) | p.3, p.4 | UC-01, UC-02 | AT-13 |
 | NFR-03 | Push update ≤ 1 s | p.3 | UC-01, UC-03 | AT-14 |
-| NFR-04 | bcrypt hashes, role enforcement | p.1 | UC-07, UC-03, UC-06 | AT-07, AT-11, AT-15 |
-| NFR-05 | ≤ 3 actions, error ≤ 1 s | p.2, p.4 | UC-01 | AT-16 |
+| NFR-04 | 15-min session timeout, lockout after 5 failed logins | p.1 | UC-07, UC-01, UC-03 | AT-19 |
+| NFR-05 | Manual reservation ≤ 30 s, auto ≤ 3 actions | p.4 | UC-01, UC-02 | AT-16 |
 | NFR-06 | SLA report ≤ 10 s for 5,000 events | p.4 | UC-04, UC-05 | AT-17 |
+| NFR-07 | Missed monthly report generated ≤ 5 min after restart | p.4, p.5 | UC-04 | AT-20 |
+| NFR-08 | Stored reports are read-only | p.4 | UC-06 | AT-21 |
+| NFR-09 | Open report ≤ 3 actions, hh:mm format | p.4, p.5 | UC-06 | AT-22 |
+| NFR-10 | bcrypt hashes, cost ≥ 10 | p.1 | UC-07 | AT-15 |
 
 ---
 
@@ -279,3 +284,4 @@ Given the database contains 5,000 events closed in the selected month
 When the System Administrator generates the SLA report for that month
 Then the report is displayed within 10 seconds
 ```
+
