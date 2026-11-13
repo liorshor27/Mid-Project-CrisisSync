@@ -171,7 +171,7 @@ And both tasks move to the Active state
 **AT-05 – Automatic allocation fails when no alternative is left (error)** — FR-04
 ```gherkin
 Given a Ready task needs a bulldozer
-And no bulldozer is Available after 2 alternative attempts
+And every bulldozer in the pool is Reserved or Faulty/In Maintenance
 When the Dispatcher requests automatic allocation
 Then the allocation fails and no resource is reserved
 And the task remains in the Ready state
@@ -202,8 +202,8 @@ And the task remains Active and its resources remain Reserved
 
 **AT-08 – Automatic monthly SLA report (happy path)** — FR-08, FR-09
 ```gherkin
-Given during October two "Fire" events were closed after 2 h and 4 h
-And one "Road Accident" event was closed after 1 h
+Given during October two "Fire" events had their last task closed 2 h and 4 h after the event was opened
+And one "Road Accident" event had its last task closed 1 h after it was opened
 When the system clock reaches the end of October
 Then the system generates the October SLA report automatically
 And the report shows an average of 3 h for "Fire" and 1 h for "Road Accident"
@@ -212,7 +212,7 @@ And the report shows an average of 3 h for "Fire" and 1 h for "Road Accident"
 **AT-09 – On-demand report for a past month (happy path)** — FR-10
 ```gherkin
 Given the System Administrator is logged in
-And events were closed during August
+And some events had their last task closed during August
 When the Administrator requests the SLA report for August
 Then the system displays the August SLA report grouped by event type
 ```
@@ -233,10 +233,7 @@ When the Dispatcher tries to open an SLA report
 Then the system denies access
 And no report data is sent to the Dispatcher's station
 ```
-
-### Non-functional tests
-
-**AT-12 – Concurrent reservation of the same resource (reliability)** — FR-12
+**AT-12 – Concurrent reservation of the same resource (error and recovery)** — FR-12
 ```gherkin
 Given bulldozer B1 is Available
 And two Dispatcher stations each have a Ready task whose package includes B1
@@ -245,6 +242,10 @@ Then in every trial exactly one reservation succeeds
 And the failed reservation leaves none of its package resources Reserved
 And the failing Dispatcher receives a clear message and an updated screen
 ```
+
+### Non-functional tests
+
+
 
 **AT-13 – Reservation response time (performance)** — NFR-02
 ```gherkin
