@@ -282,7 +282,7 @@ Then the request is submitted in no more than 3 user actions
 
 **AT-17 – SLA report generation time (performance)** — NFR-06
 ```gherkin
-Given the database contains 5,000 events closed in the selected month
+Given the database contains 5,000 events whose last task was closed in the selected month
 When the System Administrator generates the SLA report for that month
 Then the report is displayed within 10 seconds
 ```
