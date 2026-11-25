@@ -1,0 +1,126 @@
+@startuml
+title Reserve Resource Package, Report Completion and Release Resources
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam ActivityBackgroundColor #FFFFFF
+skinparam ActivityBorderColor #333333
+skinparam ArrowColor #333333
+skinparam ActivityDiamondBackgroundColor #FFFFFF
+skinparam ActivityDiamondBorderColor #333333
+skinparam SwimlaneTitleFontStyle bold
+
+' ===== Swimlanes: Actors first, then Controllers =====
+|#EAF2FB|«Actor» Dispatcher|
+|#EAF2FB|«Actor» Field Commander|
+|#EAF2FB|«Actor» Field Crew Member|
+|#F4F4F4|«Controller» ReservationController|
+|#F4F4F4|«Controller» TaskController|
+
+' ===== A. Reservation request =====
+|#EAF2FB|«Actor» Dispatcher|
+start
+:Open event status screen;
+:Select task;
+if (Reservation mode?) then ([manual])
+  :Select resources;
+else ([automatic])
+  :Select allocation criterion;
+endif
+:Submit reservation request;
+
+' ===== B. Check and reserve =====
+|#F4F4F4|«Controller» ReservationController|
+:Check task state;
+if (Task state?) then ([task not Ready])
+  :Reject: "Task is not Ready";
+  |«Actor» Dispatcher|
+  :View message;
+else ([task Ready])
+  |«Controller» ReservationController|
+  if (Reservation mode?) then ([automatic])
+    :Select best available resources by criterion;
+  else ([manual])
+  endif
+  repeat
+    :Begin transaction;
+    :Lock event, task and resource records (ascending ID);
+    :Check availability of all package resources;
+    if (Resources available?) then ([all available])
+      :Set package resources to Reserved;
+      :Set task to Active;
+      :Commit transaction;
+    else ([some unavailable])
+      :Rollback transaction;
+      if (Alternative possible?) then ([automatic and alternative exists and attempts < 3])
+        :Replace only the taken resources;
+      else ([manual or no alternative or attempts = 3])
+      endif
+    endif
+  repeat while (Retry?) is ([taken resources replaced]) not ([no retry])
+
+  if (Reservation committed?) then ([no])
+    :Notify failure and refresh screen;
+    |«Actor» Dispatcher|
+    :View failure message;
+  else ([yes])
+    |«Controller» ReservationController|
+    fork
+      :Record reservation in audit log;
+    fork again
+      :Push update to all clients (sendToAllClients);
+    end fork
+    |«Actor» Dispatcher|
+    :View task as Active;
+
+    ' ===== C. Carrying out the task and equipment malfunction =====
+    |«Actor» Field Commander|
+    :Carry out task;
+    if (Equipment malfunction?) then ([malfunction found by Field Commander])
+      :Report equipment malfunction;
+    elseif () then ([malfunction found by Field Crew Member])
+      |«Actor» Field Crew Member|
+      :Report equipment malfunction;
+    else ([no malfunction])
+    endif
+    |«Controller» TaskController|
+    if (Malfunction reported?) then ([yes])
+      :Release faulty resource and mark it Faulty;
+      :Alert Dispatcher;
+      |«Actor» Dispatcher|
+      if (Handle missing resource?) then ([replacement needed])
+        :Assign replacement resource;
+      else ([resource not required])
+        :Confirm resource not required;
+      endif
+    else ([no])
+    endif
+
+    ' ===== D. Completion report =====
+    |«Actor» Field Commander|
+    :Report task completion;
+    |«Controller» TaskController|
+    :Verify assigned Field Commander;
+    if (Reporter is the assigned Field Commander?) then ([not assigned])
+      :Reject completion report;
+    elseif (Missing resource?) then ([resource missing and not waived])
+      :Reject: "Task is missing a required resource";
+    else ([assigned, no missing resource or waived])
+      :Set task to Completed;
+      fork
+        :Release task resources (set to Available);
+      fork again
+        :Promote dependent tasks to Ready;
+      fork again
+        :Record completion in audit log;
+      end fork
+      :Push update to all clients (sendToAllClients);
+      |«Actor» Field Commander|
+      :View result on event status screen;
+    endif
+  endif
+endif
+
+' ===== E. End =====
+|#F4F4F4|«Controller» TaskController|
+stop
+@enduml
