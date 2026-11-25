@@ -1,0 +1,83 @@
+@startuml AD2_SLA_Report
+title Generate and View SLA Report
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam ActivityBackgroundColor #FFFFFF
+skinparam ActivityBorderColor #333333
+skinparam ArrowColor #333333
+skinparam ActivityDiamondBackgroundColor #FFFFFF
+skinparam ActivityDiamondBorderColor #333333
+skinparam SwimlaneTitleFontStyle bold
+
+' ===== Swimlanes: Actors first, then Controllers =====
+|#EAF2FB|«Actor» System Administrator|
+|#EAF2FB|«Actor» Scheduler|
+|#F4F4F4|«Controller» ReportController|
+|#F4F4F4|«Controller» SLAReportGenerator|
+
+' ===== A. Trigger =====
+|«Actor» Scheduler|
+start
+if (Trigger?) then ([on-demand request])
+  |«Actor» System Administrator|
+  :Open reports screen;
+  :Select a past month;
+  :Request SLA report;
+else ([end of month reached by system clock])
+  |«Actor» Scheduler|
+  :Detect end of calendar month;
+  :Request SLA report for the ended month;
+endif
+
+' ===== B. Request validation =====
+|«Controller» ReportController|
+:Receive report request;
+if (Requester authorized?) then ([requester is not Administrator])
+  :Deny access (no report data sent);
+elseif (Month valid?) then ([month has not ended])
+  :Reject: "Select a past month";
+  |«Actor» System Administrator|
+  :View message;
+else ([past month])
+  |«Controller» ReportController|
+  if (Report already stored?) then ([report already stored])
+    :Load stored report (read-only);
+  else ([report not stored])
+    ' ===== C. Report calculation =====
+    |«Controller» SLAReportGenerator|
+    fork
+      :Load events finally closed in the month;
+    fork again
+      :Load Completed tasks of these events;
+    end fork
+    :Exclude cancelled events, events not finally closed
+    and events without a Completed task;
+    if (Events included?) then ([no events included])
+      :Create empty report:
+      "No closed events in this month";
+    else ([events included])
+      :Calculate handling time per event
+      (opening to last Completed task,
+      Cancelled tasks ignored);
+      :Calculate average time per event type;
+      :Format averages as hh:mm;
+    endif
+    |«Controller» ReportController|
+    :Store report as read-only;
+  endif
+
+  ' ===== D. Report display =====
+  if (Trigger?) then ([on-demand request])
+    :Send report to Administrator station;
+    |«Actor» System Administrator|
+    :View SLA report by event type;
+  else ([end of month])
+    |«Controller» ReportController|
+    :Keep report available for viewing;
+  endif
+endif
+
+' ===== E. End =====
+|«Controller» ReportController|
+stop
+@enduml
