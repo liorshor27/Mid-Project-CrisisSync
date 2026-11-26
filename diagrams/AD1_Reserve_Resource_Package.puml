@@ -1,5 +1,6 @@
 @startuml
 title Reserve Resource Package, Report Completion and Release Resources
+scale 0.8
 skinparam shadowing false
 skinparam defaultFontName Arial
 skinparam ActivityBackgroundColor #FFFFFF
@@ -13,8 +14,10 @@ skinparam SwimlaneTitleFontStyle bold
 |#EAF2FB|«Actor» Dispatcher|
 |#EAF2FB|«Actor» Field Commander|
 |#EAF2FB|«Actor» Field Crew Member|
+|#EAF2FB|«Actor» Logistics Officer|
 |#F4F4F4|«Controller» ReservationController|
 |#F4F4F4|«Controller» TaskController|
+|#F4F4F4|«Controller» ResourceController|
 
 ' ===== A. Reservation request =====
 |#EAF2FB|«Actor» Dispatcher|
@@ -41,7 +44,7 @@ else ([task Ready])
     :Select best available resources by criterion;
   else ([manual])
   endif
-  repeat
+  while (Reservation attempt needed?) is ([first attempt or taken resources replaced])
     :Begin transaction;
     :Lock event, task and resource records (ascending ID);
     :Check availability of all package resources;
@@ -56,7 +59,7 @@ else ([task Ready])
       else ([manual or no alternative or attempts = 3])
       endif
     endif
-  repeat while (Retry?) is ([taken resources replaced]) not ([no retry])
+  endwhile ([committed or no retry])
 
   if (Reservation committed?) then ([no])
     :Notify failure and refresh screen;
@@ -77,21 +80,34 @@ else ([task Ready])
     :Carry out task;
     if (Equipment malfunction?) then ([malfunction found by Field Commander])
       :Report equipment malfunction;
-    elseif () then ([malfunction found by Field Crew Member])
-      |«Actor» Field Crew Member|
-      :Report equipment malfunction;
-    else ([no malfunction])
+    else ([not found by Field Commander])
+      if (Found by Field Crew Member?) then ([yes])
+        |«Actor» Field Crew Member|
+        :Report equipment malfunction;
+      else ([no malfunction])
+      endif
     endif
     |«Controller» TaskController|
     if (Malfunction reported?) then ([yes])
       :Release faulty resource and mark it Faulty;
-      :Alert Dispatcher;
-      |«Actor» Dispatcher|
-      if (Handle missing resource?) then ([replacement needed])
-        :Assign replacement resource;
-      else ([resource not required])
-        :Confirm resource not required;
-      endif
+      fork
+        :Alert Dispatcher;
+        |«Actor» Dispatcher|
+        if (Handle missing resource?) then ([replacement needed])
+          :Assign replacement resource;
+        else ([resource not required])
+          :Confirm resource not required;
+        endif
+      fork again
+        |«Controller» TaskController|
+        :Notify Logistics Officer of faulty resource;
+        |«Actor» Logistics Officer|
+        :Handle faulty resource (repair / maintenance);
+        :Update maintenance status to Available;
+        |«Controller» ResourceController|
+        :Set resource to Available;
+        :Record resource update in audit log;
+      end fork
     else ([no])
     endif
 
@@ -100,22 +116,24 @@ else ([task Ready])
     :Report task completion;
     |«Controller» TaskController|
     :Verify assigned Field Commander;
-    if (Reporter is the assigned Field Commander?) then ([not assigned])
+    if (Reporter is the assigned Field Commander?) then ([no])
       :Reject completion report;
-    elseif (Missing resource?) then ([resource missing and not waived])
-      :Reject: "Task is missing a required resource";
-    else ([assigned, no missing resource or waived])
-      :Set task to Completed;
-      fork
-        :Release task resources (set to Available);
-      fork again
-        :Promote dependent tasks to Ready;
-      fork again
-        :Record completion in audit log;
-      end fork
-      :Push update to all clients (sendToAllClients);
-      |«Actor» Field Commander|
-      :View result on event status screen;
+    else ([yes])
+      if (Missing resource?) then ([resource missing and not waived])
+        :Reject: "Task is missing a required resource";
+      else ([no missing resource or waived])
+        :Set task to Completed;
+        fork
+          :Release task resources (set to Available);
+        fork again
+          :Promote dependent tasks to Ready;
+        fork again
+          :Record completion in audit log;
+        end fork
+        :Push update to all clients (sendToAllClients);
+        |«Actor» Field Commander|
+        :View result on event status screen;
+      endif
     endif
   endif
 endif
