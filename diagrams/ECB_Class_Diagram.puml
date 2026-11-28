@@ -1,0 +1,690 @@
+@startuml
+title CrisisSync - ECB Class Diagram (Group 13)
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam classAttributeIconSize 0
+skinparam nodesep 35
+skinparam ranksep 55
+skinparam class {
+  BackgroundColor<<boundary>> #FFF4D6
+  BackgroundColor<<control>> #E3F0FF
+  BackgroundColor<<entity>> #E6F5E6
+}
+hide empty members
+
+' =====================================================================
+' INFRASTRUCTURE (external reuse: JavaFX, OCSF, JDBC)
+' =====================================================================
+abstract class Application << (B,#F5C242) boundary >> {
+  +start(primaryStage: Stage): void
+}
+abstract class AbstractServer << (C,#5B9BD5) control >> {
+  +listen(): void
+  +sendToAllClients(msg: Object): void
+  #handleMessageFromClient(msg: Object, client: ConnectionToClient): void
+  #clientConnected(client: ConnectionToClient): void
+  #clientDisconnected(client: ConnectionToClient): void
+}
+abstract class AbstractClient << (C,#5B9BD5) control >> {
+  +openConnection(): void
+  +sendToServer(msg: Object): void
+  #handleMessageFromServer(msg: Object): void
+}
+class Connection << (C,#5B9BD5) control >> {
+  +prepareStatement(sql: String): PreparedStatement
+  +setAutoCommit(autoCommit: boolean): void
+  +commit(): void
+  +rollback(): void
+}
+
+' =====================================================================
+' CLIENT - BOUNDARY (JavaFX screens)
+' =====================================================================
+class ClientApp << (B,#F5C242) boundary >> {
+  +start(primaryStage: Stage): void
+}
+class LoginScreen << (B,#F5C242) boundary >> {
+  -serverIpField: TextField
+  -portField: TextField
+  -usernameField: TextField
+  -passwordField: PasswordField
+  +onConnectClicked(): void
+  +onLoginClicked(): void
+  +showError(message: String): void
+}
+class DispatcherScreen << (B,#F5C242) boundary >> {
+  +showOpenEvents(events: List<EmergencyEvent>): void
+  +onOpenEventClicked(): void
+  +onCreateTaskClicked(): void
+  +onAddPrerequisiteClicked(): void
+  +onCancelEventClicked(): void
+  +onCloseEventClicked(): void
+}
+class EventStatusScreen << (B,#F5C242) boundary >> {
+  -selectedTaskId: int
+  +showEvent(event: EmergencyEvent, tasks: List<Task>): void
+  +onReserveClicked(): void
+  +onAutoAllocateClicked(): void
+  +onCancelTaskClicked(): void
+  +onAssignReplacementClicked(): void
+  +onWaiveResourceClicked(): void
+  +onReportCompletionClicked(): void
+  +onReportMalfunctionClicked(): void
+  +onUpdate(update: UpdateNotification): void
+  +showMessage(message: String): void
+}
+class ResourceManagementScreen << (B,#F5C242) boundary >> {
+  +showResources(resources: List<Resource>): void
+  +onUpdateEquipmentStatusClicked(): void
+  +onTransferEquipmentClicked(): void
+  +onUpdateCrewAvailabilityClicked(): void
+  +onUpdate(update: UpdateNotification): void
+}
+class CrewMemberScreen << (B,#F5C242) boundary >> {
+  +onStartShiftClicked(): void
+  +onSetReadinessClicked(): void
+  +showAssignedTask(task: Task): void
+  +onReportMalfunctionClicked(): void
+  +onUpdate(update: UpdateNotification): void
+}
+class AdminScreen << (B,#F5C242) boundary >> {
+  +onManageUsersClicked(): void
+  +onLoadInitialDataClicked(): void
+  +showEventHistory(events: List<EmergencyEvent>): void
+  +onFilterHistoryClicked(): void
+}
+class ReportScreen << (B,#F5C242) boundary >> {
+  -selectedMonth: YearMonth
+  +onRequestReportClicked(): void
+  +showSLAReport(report: SLAReport): void
+  +showUtilizationReport(report: UtilizationReport): void
+  +showMessage(message: String): void
+}
+
+' =====================================================================
+' CLIENT - CONTROL
+' =====================================================================
+class CrisisSyncClient << (C,#5B9BD5) control >> {
+  -loggedInUser: User
+  +connect(host: String, port: int): void
+  +sendRequest(request: Request): void
+  #handleMessageFromServer(msg: Object): void
+  +addUpdateListener(listener: UpdateListener): void
+}
+abstract class UpdateListener << (B,#F5C242) boundary >> {
+  +{abstract} onUpdate(update: UpdateNotification): void
+}
+class LoginClientController << (C,#5B9BD5) control >> {
+  +connect(host: String, port: int): void
+  +login(username: String, password: String): void
+  +logout(): void
+}
+class DispatcherClientController << (C,#5B9BD5) control >> {
+  +openEvent(name: String, type: EventType, location: Location): void
+  +createTask(eventId: int, name: String, estimatedDuration: Duration, prerequisiteIds: List<Integer>, requirements: List<ResourceRequirement>): void
+  +addPrerequisite(taskId: int, prerequisiteId: int): void
+  +reservePackage(taskId: int, resourceIds: List<Integer>): void
+  +requestAutoAllocation(taskId: int, criterion: AllocationCriterion): void
+  +assignReplacement(taskId: int, requirementId: int, resourceId: int): void
+  +waiveRequirement(taskId: int, requirementId: int): void
+  +cancelTask(taskId: int, confirmed: boolean): void
+  +cancelEvent(eventId: int): void
+  +closeEvent(eventId: int): void
+}
+class FieldCommanderClientController << (C,#5B9BD5) control >> {
+  +loadMyEvents(): void
+  +reportTaskCompletion(taskId: int): void
+  +reportMalfunction(taskId: int, equipmentId: int): void
+}
+class CrewMemberClientController << (C,#5B9BD5) control >> {
+  +reportShiftStart(): void
+  +reportReadiness(available: boolean): void
+  +loadAssignedTask(): void
+  +reportMalfunction(taskId: int, equipmentId: int): void
+}
+class LogisticsClientController << (C,#5B9BD5) control >> {
+  +updateEquipmentStatus(equipmentId: int, status: ResourceStatus): void
+  +transferEquipment(equipmentId: int, newLocation: Location): void
+  +updateCrewAvailability(crewMemberId: int, status: ResourceStatus): void
+}
+class AdminClientController << (C,#5B9BD5) control >> {
+  +createUser(username: String, fullName: String, role: UserRole): void
+  +updateUserRole(userId: int, role: UserRole): void
+  +loadInitialData(filePath: String): void
+  +loadEventHistory(from: LocalDate, to: LocalDate, type: EventType, status: EventStatus): void
+  +requestReport(type: ReportType, month: YearMonth): void
+}
+
+' =====================================================================
+' COMMON - PROTOCOL (OCSF messages, shared by client and server)
+' =====================================================================
+class Request << (E,#70AD47) entity >> {
+  -type: RequestType
+  -userId: int
+  -payload: Object
+}
+class Response << (E,#70AD47) entity >> {
+  -requestType: RequestType
+  -success: boolean
+  -message: String
+  -payload: Object
+}
+class UpdateNotification << (E,#70AD47) entity >> {
+  -eventId: int
+  -targetType: String
+  -targetId: int
+  -newStatus: String
+  -timestamp: LocalDateTime
+}
+enum RequestType << (E,#70AD47) entity >> {
+  LOGIN
+  LOGOUT
+  OPEN_EVENT
+  CANCEL_EVENT
+  CLOSE_EVENT
+  CREATE_TASK
+  ADD_PREREQUISITE
+  RESERVE_PACKAGE
+  AUTO_ALLOCATE
+  ASSIGN_REPLACEMENT
+  WAIVE_REQUIREMENT
+  CANCEL_TASK
+  REPORT_COMPLETION
+  REPORT_MALFUNCTION
+  UPDATE_RESOURCE
+  GET_EVENT_STATUS
+  GET_EVENT_HISTORY
+  GET_REPORT
+  MANAGE_USER
+  LOAD_INITIAL_DATA
+}
+
+' =====================================================================
+' COMMON - ENTITY
+' =====================================================================
+class User << (E,#70AD47) entity >> {
+  -userId: int
+  -username: String
+  -passwordHash: String
+  -fullName: String
+  -role: UserRole
+  -failedLoginAttempts: int
+  -lockedUntil: LocalDateTime
+  +isLocked(): boolean
+}
+abstract class Resource << (E,#70AD47) entity >> {
+  -resourceId: int
+  -currentLocation: Location
+  -status: ResourceStatus
+  +isAvailable(): boolean
+}
+class CrewMember << (E,#70AD47) entity >> {
+  -name: String
+  -crewRole: CrewRole
+}
+class Equipment << (E,#70AD47) entity >> {
+  -equipmentType: EquipmentType
+  -currentStationId: int
+  -engineHours: int
+  -lastStatusUpdate: LocalDateTime
+  -version: int
+}
+class Location << (E,#70AD47) entity >> {
+  -latitude: double
+  -longitude: double
+  -address: String
+  +distanceTo(other: Location): double
+}
+class EmergencyEvent << (E,#70AD47) entity >> {
+  -eventId: int
+  -name: String
+  -type: EventType
+  -location: Location
+  -status: EventStatus
+  -openedAt: LocalDateTime
+  -cancelledAt: LocalDateTime
+  -closedAt: LocalDateTime
+  +allTasksFinal(): boolean
+  +getProgress(): String
+}
+class Task << (E,#70AD47) entity >> {
+  -taskId: int
+  -name: String
+  -estimatedDuration: Duration
+  -status: TaskStatus
+  -activatedAt: LocalDateTime
+  -completedAt: LocalDateTime
+  +isOverdue(): boolean
+  +canReserve(): boolean
+}
+class ResourcePackage << (E,#70AD47) entity >> {
+  -packageId: int
+}
+class ResourceRequirement << (E,#70AD47) entity >> {
+  -requirementId: int
+  -requiredCrewRole: CrewRole
+  -requiredEquipmentType: EquipmentType
+  -waived: boolean
+  +isSatisfiedBy(resource: Resource): boolean
+}
+class Assignment << (E,#70AD47) entity >> {
+  -assignmentId: int
+  -startTime: LocalDateTime
+  -endTime: LocalDateTime
+  +isOpen(): boolean
+}
+class SettlementRecord << (E,#70AD47) entity >> {
+  -transactionToken: String
+  -approved: boolean
+  -respondedAt: LocalDateTime
+}
+class CostSummary << (E,#70AD47) entity >> {
+  -personnelHours: double
+  -engineHours: double
+  -consumablesCost: double
+  +getTotalCost(): double
+}
+class AuditLogEntry << (E,#70AD47) entity >> {
+  -entryId: int
+  -timestamp: LocalDateTime
+  -action: String
+  -targetType: String
+  -targetId: int
+  -details: String
+}
+abstract class Report << (E,#70AD47) entity >> {
+  -reportId: int
+  -reportMonth: YearMonth
+  -generatedAt: LocalDateTime
+  -type: ReportType
+}
+class SLAReport << (E,#70AD47) entity >> {
+  -averageTimeByEventType: Map<EventType, Duration>
+  -averageTimeHhMm: Map<EventType, String>
+}
+class UtilizationReport << (E,#70AD47) entity >> {
+  -utilizationByEquipmentType: Map<EquipmentType, Double>
+  -utilizationByCrewRole: Map<CrewRole, Double>
+}
+
+enum UserRole << (E,#70AD47) entity >> {
+  SYSTEM_ADMINISTRATOR
+  LOGISTICS_OFFICER
+  DISPATCHER
+  FIELD_COMMANDER
+  FIELD_CREW_MEMBER
+}
+enum ResourceStatus << (E,#70AD47) entity >> {
+  AVAILABLE
+  RESERVED
+  UNAVAILABLE
+  OUT_OF_SERVICE
+}
+enum CrewRole << (E,#70AD47) entity >> {
+  PARAMEDIC
+  HEAVY_EQUIPMENT_OPERATOR
+  FIREFIGHTER
+  HAZMAT_SPECIALIST
+  RESCUER
+  FIELD_COMMANDER
+}
+enum EquipmentType << (E,#70AD47) entity >> {
+  AMBULANCE
+  FIRE_TRUCK
+  BULLDOZER
+  DECONTAMINATION_TENT
+  GENERATOR
+}
+enum EventType << (E,#70AD47) entity >> {
+  BUILDING_COLLAPSE
+  FIRE
+  ROAD_ACCIDENT
+  HAZMAT_LEAK
+  NATURAL_DISASTER
+}
+enum EventStatus << (E,#70AD47) entity >> {
+  OPEN
+  CLOSED
+  CANCELLED
+}
+enum TaskStatus << (E,#70AD47) entity >> {
+  BLOCKED
+  READY
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+enum ReportType << (E,#70AD47) entity >> {
+  SLA
+  UTILIZATION
+}
+enum AllocationCriterion << (E,#70AD47) entity >> {
+  NEAREST_LOCATION
+}
+
+' =====================================================================
+' SERVER - BOUNDARY
+' =====================================================================
+class ServerApp << (B,#F5C242) boundary >> {
+  +start(primaryStage: Stage): void
+}
+class ServerMonitorScreen << (B,#F5C242) boundary >> {
+  +onStartServerClicked(): void
+  +onStopServerClicked(): void
+  +onClientListChanged(clients: List<String>): void
+  +onAuditEntry(entry: AuditLogEntry): void
+}
+class ReportScheduler << (B,#F5C242) boundary >> {
+  +start(): void
+  +onEndOfMonth(month: YearMonth): void
+}
+class SettlementSystemAdapter << (B,#F5C242) boundary >> {
+  -simulateRejection: boolean
+  +requestSettlement(eventId: int, costs: CostSummary): SettlementRecord
+  +configureRejectionSimulation(reject: boolean): void
+}
+
+' =====================================================================
+' SERVER - CONTROL
+' =====================================================================
+class CrisisSyncServer << (C,#5B9BD5) control >> {
+  -connectedClients: List<ConnectionToClient>
+  #handleMessageFromClient(msg: Object, client: ConnectionToClient): void
+  #clientConnected(client: ConnectionToClient): void
+  #clientDisconnected(client: ConnectionToClient): void
+  +broadcastUpdate(update: UpdateNotification): void
+  +addServerListener(listener: ServerActivityListener): void
+}
+abstract class ServerActivityListener << (B,#F5C242) boundary >> {
+  +{abstract} onClientListChanged(clients: List<String>): void
+  +{abstract} onAuditEntry(entry: AuditLogEntry): void
+}
+abstract class SettlementGateway << (B,#F5C242) boundary >> {
+  +{abstract} requestSettlement(eventId: int, costs: CostSummary): SettlementRecord
+}
+class AuthenticationController << (C,#5B9BD5) control >> {
+  +login(username: String, password: String): Response
+  +logout(userId: int): void
+  +isAuthorized(userId: int, role: UserRole): boolean
+  +createUser(username: String, fullName: String, role: UserRole): Response
+  +updateUserRole(userId: int, role: UserRole): Response
+  -verifyPassword(password: String, passwordHash: String): boolean
+}
+class EventController << (C,#5B9BD5) control >> {
+  +openEvent(name: String, type: EventType, location: Location, dispatcherId: int): Response
+  +cancelEvent(eventId: int, dispatcherId: int): Response
+  +closeEvent(eventId: int, dispatcherId: int): Response
+  +getEventStatus(eventId: int): Response
+  +getEventHistory(from: LocalDate, to: LocalDate, type: EventType, status: EventStatus): Response
+  -calculateCosts(eventId: int): CostSummary
+}
+class TaskController << (C,#5B9BD5) control >> {
+  +createTask(eventId: int, name: String, estimatedDuration: Duration, prerequisiteIds: List<Integer>, requirements: List<ResourceRequirement>): Response
+  +addPrerequisite(taskId: int, prerequisiteId: int, dispatcherId: int): Response
+  +cancelTask(taskId: int, confirmed: boolean, dispatcherId: int): Response
+  +reportCompletion(taskId: int, commanderId: int): Response
+  +reportMalfunction(taskId: int, equipmentId: int, reporterId: int): Response
+  +waiveRequirement(taskId: int, requirementId: int, dispatcherId: int): Response
+  -isAssignedCommander(taskId: int, commanderId: int): boolean
+  -hasMissingResource(taskId: int): boolean
+  -createsCycle(taskId: int, prerequisiteId: int): boolean
+  -releaseTaskResources(conn: Connection, taskId: int): void
+  -promoteDependentTasks(conn: Connection, taskId: int): void
+}
+class ReservationController << (C,#5B9BD5) control >> {
+  -MAX_ATTEMPTS: int = 3
+  +reservePackage(taskId: int, resourceIds: List<Integer>, dispatcherId: int): Response
+  +autoAllocate(taskId: int, criterion: AllocationCriterion, dispatcherId: int): Response
+  +assignReplacement(taskId: int, requirementId: int, resourceId: int, dispatcherId: int): Response
+  -tryReserve(taskId: int, resourceIds: List<Integer>, dispatcherId: int): boolean
+  -replaceTakenResources(selection: List<Resource>, taken: List<Integer>): List<Resource>
+  -getStrategy(criterion: AllocationCriterion): AllocationStrategy
+}
+abstract class AllocationStrategy << (C,#5B9BD5) control >> {
+  +{abstract} selectBest(requirement: ResourceRequirement, eventLocation: Location, candidates: List<Resource>): Resource
+}
+class NearestLocationStrategy << (C,#5B9BD5) control >> {
+  +selectBest(requirement: ResourceRequirement, eventLocation: Location, candidates: List<Resource>): Resource
+}
+class ResourceController << (C,#5B9BD5) control >> {
+  +updateEquipmentStatus(equipmentId: int, status: ResourceStatus, officerId: int): Response
+  +transferEquipment(equipmentId: int, newLocation: Location, officerId: int): Response
+  +updateCrewAvailability(crewMemberId: int, status: ResourceStatus, userId: int): Response
+  +reportShiftStart(crewMemberId: int): Response
+  +getAssignedTask(crewMemberId: int): Response
+}
+class ReportController << (C,#5B9BD5) control >> {
+  +requestReport(type: ReportType, month: YearMonth, requesterId: int): Response
+  +generateMonthlyReports(month: YearMonth): void
+  -isPastMonth(month: YearMonth): boolean
+  -storeReport(report: Report): void
+}
+abstract class ReportGenerator << (C,#5B9BD5) control >> {
+  +{abstract} generate(month: YearMonth): Report
+}
+class SLAReportGenerator << (C,#5B9BD5) control >> {
+  +generate(month: YearMonth): Report
+  -loadClosedEvents(month: YearMonth): List<EmergencyEvent>
+  -loadCompletedTasks(events: List<EmergencyEvent>): List<Task>
+  -filterIncludedEvents(events: List<EmergencyEvent>, tasks: List<Task>): List<EmergencyEvent>
+  -calculateHandlingTime(event: EmergencyEvent, tasks: List<Task>): Duration
+  -calculateAveragePerType(times: Map<EmergencyEvent, Duration>): Map<EventType, Duration>
+  -formatHhMm(time: Duration): String
+}
+class UtilizationReportGenerator << (C,#5B9BD5) control >> {
+  +generate(month: YearMonth): Report
+}
+class AuditController << (C,#5B9BD5) control >> {
+  +record(userId: int, action: String, targetType: String, targetId: int, details: String): void
+  +getTimeline(eventId: int): List<AuditLogEntry>
+}
+class DataLoadController << (C,#5B9BD5) control >> {
+  +loadInitialData(filePath: String, adminId: int): Response
+}
+
+' =====================================================================
+' SERVER - DATA ACCESS (JDBC / DAO)
+' =====================================================================
+class DBConnectionManager << (C,#5B9BD5) control >> {
+  -url: String
+  -user: String
+  -password: String
+  +getConnection(): Connection
+  +beginTransaction(conn: Connection): void
+  +commit(conn: Connection): void
+  +rollback(conn: Connection): void
+}
+class UserDAO << (C,#5B9BD5) control >> {
+  +findByUsername(username: String): User
+  +insert(user: User): void
+  +updateLoginState(user: User): void
+}
+class EventDAO << (C,#5B9BD5) control >> {
+  +insert(event: EmergencyEvent): int
+  +findById(eventId: int): EmergencyEvent
+  +lockForUpdate(conn: Connection, eventId: int): EmergencyEvent
+  +updateStatus(conn: Connection, eventId: int, status: EventStatus): void
+  +findOpen(): List<EmergencyEvent>
+  +findClosedInMonth(month: YearMonth): List<EmergencyEvent>
+  +findByFilter(from: LocalDate, to: LocalDate, type: EventType, status: EventStatus): List<EmergencyEvent>
+}
+class TaskDAO << (C,#5B9BD5) control >> {
+  +insert(conn: Connection, task: Task): int
+  +findById(taskId: int): Task
+  +lockForUpdate(conn: Connection, taskId: int): Task
+  +updateStatus(conn: Connection, taskId: int, status: TaskStatus): void
+  +findByEvent(eventId: int): List<Task>
+  +findDependents(conn: Connection, taskId: int): List<Task>
+  +findPrerequisites(taskId: int): List<Task>
+  +insertPrerequisite(conn: Connection, taskId: int, prerequisiteId: int): void
+  +findCompletedByEvents(eventIds: List<Integer>): List<Task>
+}
+class ResourceDAO << (C,#5B9BD5) control >> {
+  +lockForUpdate(conn: Connection, sortedIds: List<Integer>): List<Resource>
+  +updateStatus(conn: Connection, resourceId: int, status: ResourceStatus): void
+  +findAvailableFor(requirement: ResourceRequirement): List<Resource>
+  +updateLocation(resourceId: int, location: Location): void
+  +findById(resourceId: int): Resource
+}
+class AssignmentDAO << (C,#5B9BD5) control >> {
+  +insert(conn: Connection, assignment: Assignment): void
+  +close(conn: Connection, assignmentId: int, endTime: LocalDateTime): void
+  +findOpenByTask(conn: Connection, taskId: int): List<Assignment>
+}
+class AuditLogDAO << (C,#5B9BD5) control >> {
+  +insert(entry: AuditLogEntry): void
+  +findByEvent(eventId: int): List<AuditLogEntry>
+}
+class ReportDAO << (C,#5B9BD5) control >> {
+  +insert(report: Report): void
+  +find(type: ReportType, month: YearMonth): Report
+}
+class SettlementDAO << (C,#5B9BD5) control >> {
+  +insert(conn: Connection, record: SettlementRecord): void
+}
+
+' =====================================================================
+' GENERALIZATION (the only arrow in the diagram)
+' =====================================================================
+Application <|-- ClientApp
+Application <|-- ServerApp
+AbstractClient <|-- CrisisSyncClient
+AbstractServer <|-- CrisisSyncServer
+UpdateListener <|-- EventStatusScreen
+UpdateListener <|-- ResourceManagementScreen
+UpdateListener <|-- CrewMemberScreen
+ServerActivityListener <|-- ServerMonitorScreen
+SettlementGateway <|-- SettlementSystemAdapter
+AllocationStrategy <|-- NearestLocationStrategy
+ReportGenerator <|-- SLAReportGenerator
+ReportGenerator <|-- UtilizationReportGenerator
+Resource <|-- CrewMember
+Resource <|-- Equipment
+Report <|-- SLAReport
+Report <|-- UtilizationReport
+
+' =====================================================================
+' CLIENT: boundary -- control (boundary talks only to control)
+' =====================================================================
+ClientApp "1" -- "1" LoginClientController : launches
+LoginScreen "1" -- "1" LoginClientController : uses
+DispatcherScreen "1" -- "1" DispatcherClientController : uses
+EventStatusScreen "0..*" -- "0..1" DispatcherClientController : uses
+EventStatusScreen "0..*" -- "0..1" FieldCommanderClientController : uses
+ResourceManagementScreen "1" -- "1" LogisticsClientController : uses
+CrewMemberScreen "1" -- "1" CrewMemberClientController : uses
+AdminScreen "1" -- "1" AdminClientController : uses
+ReportScreen "1" -- "1" AdminClientController : uses
+
+LoginClientController "1" -- "1" CrisisSyncClient : sends via
+DispatcherClientController "1" -- "1" CrisisSyncClient : sends via
+FieldCommanderClientController "1" -- "1" CrisisSyncClient : sends via
+CrewMemberClientController "1" -- "1" CrisisSyncClient : sends via
+LogisticsClientController "1" -- "1" CrisisSyncClient : sends via
+AdminClientController "1" -- "1" CrisisSyncClient : sends via
+CrisisSyncClient "1" -- "0..*" UpdateListener : notifies
+
+CrisisSyncClient "1" -- "0..*" Request : sends
+CrisisSyncClient "1" -- "0..*" Response : receives
+CrisisSyncClient "1" -- "0..*" UpdateNotification : receives
+
+' =====================================================================
+' SERVER: boundary -- control
+' =====================================================================
+ServerApp "1" -- "1" CrisisSyncServer : launches
+ServerMonitorScreen "1" -- "1" CrisisSyncServer : starts and monitors
+CrisisSyncServer "1" -- "0..*" ServerActivityListener : notifies
+ReportScheduler "1" -- "1" ReportController : triggers monthly
+EventController "1" -- "1" SettlementGateway : requests settlement
+
+CrisisSyncServer "1" -- "1" AuthenticationController : routes to
+CrisisSyncServer "1" -- "1" EventController : routes to
+CrisisSyncServer "1" -- "1" TaskController : routes to
+CrisisSyncServer "1" -- "1" ReservationController : routes to
+CrisisSyncServer "1" -- "1" ResourceController : routes to
+CrisisSyncServer "1" -- "1" ReportController : routes to
+CrisisSyncServer "1" -- "1" DataLoadController : routes to
+CrisisSyncServer "1" -- "0..*" UpdateNotification : broadcasts
+
+ReservationController "1" -- "1..*" AllocationStrategy : selects resources by
+ReportController "1" -- "1..*" ReportGenerator : generates with
+ReportController "0..*" -- "1" AuthenticationController : checks permission via
+ReservationController "0..*" -- "1" AuditController : records via
+TaskController "0..*" -- "1" AuditController : records via
+EventController "0..*" -- "1" AuditController : records via
+ResourceController "0..*" -- "1" AuditController : records via
+AuditController "1" -- "1" CrisisSyncServer : reports entries to
+
+' =====================================================================
+' SERVER control -- DAO -- JDBC
+' =====================================================================
+AuthenticationController "1" -- "1" UserDAO : uses
+EventController "1" -- "1" EventDAO : uses
+EventController "1" -- "1" SettlementDAO : uses
+TaskController "1" -- "1" TaskDAO : uses
+TaskController "1" -- "1" AssignmentDAO : uses
+ReservationController "1" -- "1" ResourceDAO : uses
+ReservationController "1" -- "1" AssignmentDAO : uses
+ReservationController "1" -- "1" TaskDAO : uses
+ResourceController "1" -- "1" ResourceDAO : uses
+SLAReportGenerator "1" -- "1" EventDAO : reads
+SLAReportGenerator "1" -- "1" TaskDAO : reads
+ReportController "1" -- "1" ReportDAO : uses
+AuditController "1" -- "1" AuditLogDAO : uses
+DataLoadController "1" -- "1" UserDAO : loads into
+DataLoadController "1" -- "1" ResourceDAO : loads into
+DBConnectionManager "1" -- "0..*" Connection : opens
+UserDAO "0..*" -- "1" DBConnectionManager : gets connection from
+EventDAO "0..*" -- "1" DBConnectionManager : gets connection from
+TaskDAO "0..*" -- "1" DBConnectionManager : gets connection from
+ResourceDAO "0..*" -- "1" DBConnectionManager : gets connection from
+AssignmentDAO "0..*" -- "1" DBConnectionManager : gets connection from
+AuditLogDAO "0..*" -- "1" DBConnectionManager : gets connection from
+ReportDAO "0..*" -- "1" DBConnectionManager : gets connection from
+SettlementDAO "0..*" -- "1" DBConnectionManager : gets connection from
+
+' =====================================================================
+' control / DAO -- entity
+' =====================================================================
+AuthenticationController "1" -- "0..*" User : authenticates
+EventController "1" -- "0..*" EmergencyEvent : manages
+TaskController "1" -- "0..*" Task : manages
+ReservationController "1" -- "0..*" Assignment : creates
+ResourceController "1" -- "0..*" Resource : updates
+ReportController "1" -- "0..*" Report : stores
+AuditController "1" -- "0..*" AuditLogEntry : creates
+
+' =====================================================================
+' entity -- entity
+' =====================================================================
+EmergencyEvent "1" *-- "0..*" Task : contains
+Task "prerequisite 0..*" -- "dependent 0..*" Task : depends on
+Task "1" *-- "1" ResourcePackage : requires
+ResourcePackage "1" *-- "1..*" ResourceRequirement : includes
+ResourcePackage "0..1" o-- "0..*" Resource : groups reserved
+ResourceRequirement "1" -- "0..*" Assignment : fulfilled by
+Resource "1" -- "0..*" Assignment : assigned in
+User "1" -- "0..*" Assignment : reserves
+User "0..1" -- "0..1" CrewMember : acts as
+EmergencyEvent "1" -- "0..*" SettlementRecord : settled by
+SettlementRecord "1" *-- "1" CostSummary : bills
+User "1" -- "0..*" AuditLogEntry : performs
+
+' =====================================================================
+' DESIGN PATTERN NOTE
+' =====================================================================
+note as StrategyNote
+  <b>Design Pattern: Strategy</b>
+  Where: ReservationController (Context) holds
+  AllocationStrategy (abstract Strategy);
+  NearestLocationStrategy is a Concrete Strategy.
+  ReservationController.autoAllocate() picks the strategy
+  by the AllocationCriterion the Dispatcher selected.
+  Serves: FR-04 automatic allocation by a selected criterion,
+  and the story's demand that new criteria can be added later:
+  a new criterion = one new subclass + one enum value,
+  with no change to ReservationController.
+end note
+StrategyNote .. AllocationStrategy
+StrategyNote .. ReservationController
+@enduml
