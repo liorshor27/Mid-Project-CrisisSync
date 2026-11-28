@@ -113,6 +113,7 @@ class CrisisSyncClient << (C,#5B9BD5) control >> {
 }
 abstract class UpdateListener << (B,#F5C242) boundary >> {
   +{abstract} onUpdate(update: UpdateNotification): void
+  +{abstract} onResponse(response: Response): void
 }
 class LoginClientController << (C,#5B9BD5) control >> {
   +connect(host: String, port: int): void
@@ -553,6 +554,10 @@ AbstractServer <|-- CrisisSyncServer
 UpdateListener <|-- EventStatusScreen
 UpdateListener <|-- ResourceManagementScreen
 UpdateListener <|-- CrewMemberScreen
+UpdateListener <|-- ReportScreen
+UpdateListener <|-- LoginScreen
+UpdateListener <|-- DispatcherScreen
+UpdateListener <|-- AdminScreen
 ServerActivityListener <|-- ServerMonitorScreen
 SettlementGateway <|-- SettlementSystemAdapter
 AllocationStrategy <|-- NearestLocationStrategy
@@ -623,9 +628,14 @@ EventController "1" -- "1" EventDAO : uses
 EventController "1" -- "1" SettlementDAO : uses
 TaskController "1" -- "1" TaskDAO : uses
 TaskController "1" -- "1" AssignmentDAO : uses
+TaskController "1" -- "1" ResourceDAO : releases resources via
+TaskController "1" -- "1" EventDAO : locks event via
+TaskController "0..*" -- "1" DBConnectionManager : manages transactions via
 ReservationController "1" -- "1" ResourceDAO : uses
 ReservationController "1" -- "1" AssignmentDAO : uses
 ReservationController "1" -- "1" TaskDAO : uses
+ReservationController "1" -- "1" EventDAO : locks event via
+ReservationController "0..*" -- "1" DBConnectionManager : manages transactions via
 ResourceController "1" -- "1" ResourceDAO : uses
 SLAReportGenerator "1" -- "1" EventDAO : reads
 SLAReportGenerator "1" -- "1" TaskDAO : reads
