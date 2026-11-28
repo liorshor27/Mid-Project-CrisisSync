@@ -1,4 +1,4 @@
-@startuml SD2_SLA_Report
+@startuml
 title SD2 - Generate and View SLA Reports (monthly + on demand) - Group 13
 skinparam shadowing false
 skinparam defaultFontName Arial

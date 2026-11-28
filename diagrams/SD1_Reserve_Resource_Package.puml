@@ -1,4 +1,4 @@
-@startuml SD1_Reserve_Resource_Package
+@startuml
 title SD1 - Reserve Resource Package for a Task (incl. Race Condition) - Group 13
 skinparam shadowing false
 skinparam defaultFontName Arial
@@ -190,7 +190,7 @@ else c) Dispatcher cancels a task
   activate TC
   TC -> DBM : getConnection()
   DBM --> TC : conn
-  TC -> TDAO : findDependents(taskId)
+  TC -> TDAO : findDependents(conn, taskId)
   TDAO --> TC : dependents
   TC --> SRV : response [confirmation needed: N dependent tasks]
   deactivate TC
@@ -210,7 +210,7 @@ else c) Dispatcher cancels a task
     TC -> DBM : beginTransaction(conn)
     TC -> EDAO : lockForUpdate(conn, eventId)
     TC -> TDAO : lockForUpdate(conn, taskId)
-    TC -> TDAO : findDependents(taskId)
+    TC -> TDAO : findDependents(conn, taskId)
     TDAO --> TC : dependents
     loop for the task and each dependent task that is not final
       TC -> TC : releaseTaskResources(conn, taskId)
@@ -265,7 +265,7 @@ else d) Field Commander reports task completion and resources are released
     TC -> TDAO : updateStatus(conn, taskId, status = COMPLETED)
     TC -> TC : promoteDependentTasks(conn, taskId)
     activate TC
-    TC -> TDAO : findDependents(taskId)
+    TC -> TDAO : findDependents(conn, taskId)
     TDAO --> TC : dependents
     loop for each dependent task
       TC -> TDAO : findPrerequisites(taskId)
