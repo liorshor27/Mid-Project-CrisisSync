@@ -31,3 +31,5 @@ bin/
 
 *.lck
 *.bak_*
+.idea/
+*.iml
