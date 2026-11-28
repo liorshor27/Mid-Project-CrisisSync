@@ -1,86 +1,92 @@
 @startuml G13_PackageDiagram
 ' CrisisSync - Package Diagram (Group 13)
+' Matches the Package Diagram in G13_Assignment2.vpp.
 ' Aligned with diagrams/ECB_Class_Diagram.puml (every class belongs to exactly one package).
-!pragma layout smetana
-top to bottom direction
 title CrisisSync - Package Diagram (Layered Architecture, Group 13)
-
+set separator none
+top to bottom direction
 skinparam packageStyle folder
 skinparam shadowing false
-skinparam dpi 200
 skinparam defaultFontName Arial
-skinparam nodesep 40
-skinparam ranksep 60
+skinparam nodesep 60
+skinparam ranksep 70
 
-' ---------- UI layer ----------
-package "client.boundary" as CB <<layer: UI>> {
+' ---------- Row 1: UI layer ----------
+package client.boundary {
 }
-package "server.boundary" as SB <<layer: UI>> {
-}
-
-' ---------- Control layer ----------
-package "client.control" as CC <<layer: Control>> {
-}
-package "server.control" as SC <<layer: Control>> {
+package server.boundary {
 }
 
-' ---------- DAO layer (server only) ----------
-package "server.dao" as SD <<layer: DAO>> {
+' ---------- Row 2: Control layer, then Common below it ----------
+package client.control {
+}
+package common.protocol {
+}
+package common.entity {
+}
+package server.control {
 }
 
-' ---------- Common layer (packed into both JARs) ----------
-package "common.protocol" as CP <<layer: Common>> {
-}
-package "common.entity" as CE <<layer: Common>> {
+' ---------- Row 3: DAO layer (server only) ----------
+package server.dao {
 }
 
-' ---------- Infrastructure (external) ----------
-package "javafx" as FX <<framework>> #EEEEEE {
+' ---------- Row 4: Infrastructure (external) ----------
+package ocsf.client {
 }
-package "ocsf.client" as OC <<framework>> #EEEEEE {
+package javafx {
 }
-package "ocsf.server" as OS <<framework>> #EEEEEE {
+package jdbc {
 }
-package "jdbc" as JD <<library>> #EEEEEE {
+package ocsf.server {
 }
 
 ' ---------- Dependencies (all point downward: no cycles) ----------
 ' Client side
-CB ..> CC : <<import>>
-CB ..> CP : <<import>>
-CB ..> CE : <<import>>
-CB ..> FX : <<import>>
-CC ..> CP : <<import>>
-CC ..> CE : <<import>>
-CC ..> OC : <<import>>
+client.boundary ..> client.control : <<import>>
+client.boundary ..> common.protocol : <<import>>
+client.boundary ..> common.entity : <<import>>
+client.boundary ..> javafx : <<import>>
+client.control ..> common.protocol : <<import>>
+client.control ..> common.entity : <<import>>
+client.control ..> ocsf.client : <<import>>
 
 ' Server side
-SB ..> SC : <<import>>
-SB ..> CE : <<import>>
-SB ..> FX : <<import>>
-SC ..> SD : <<import>>
-SC ..> CP : <<import>>
-SC ..> CE : <<import>>
-SC ..> OS : <<import>>
-SC ..> JD : <<access>>
-SD ..> CE : <<import>>
-SD ..> JD : <<import>>
+server.boundary ..> server.control : <<import>>
+server.boundary ..> common.entity : <<import>>
+server.boundary ..> javafx : <<import>>
+server.control ..> server.dao : <<import>>
+server.control ..> common.protocol : <<import>>
+server.control ..> common.entity : <<import>>
+server.control ..> ocsf.server : <<import>>
+server.control ..> jdbc : <<access>>
+server.dao ..> common.entity : <<import>>
+server.dao ..> jdbc : <<import>>
 
-note right of CC
-  UpdateListener lives here and the screens in
-  client.boundary inherit from it. CrisisSyncClient
-  notifies the screens only through it (Observer),
-  so client.control never depends on client.boundary.
+' ---------- Layout only (invisible): keep the rows in left-to-right order ----------
+client.boundary -[hidden]right-> server.boundary
+client.control -[hidden]right-> server.control
+common.protocol -[hidden]right-> common.entity
+ocsf.client -[hidden]right-> javafx
+javafx -[hidden]right-> jdbc
+jdbc -[hidden]right-> ocsf.server
+
+note left of client.control
+  UpdateListener lives here and the screens
+  in client.boundary inherit from it.
+  CrisisSyncClient notifies the screens
+  only through it (Observer), so client.control
+  never depends on client.boundary.
 end note
 
-note right of SC
+note right of server.control
   Same idea on the server: ServerActivityListener
   and SettlementGateway live here; ServerMonitorScreen
   and SettlementSystemAdapter (server.boundary)
   inherit from them.
 end note
 
-note bottom of SD
+note bottom of server.dao
   Only the server talks to MySQL.
   jdbc = java.sql + MySQL Connector/J.
   Clients reach data only through OCSF messages.
