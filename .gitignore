@@ -33,3 +33,5 @@ bin/
 *.bak_*
 .idea/
 *.iml
+target/
+*.class
