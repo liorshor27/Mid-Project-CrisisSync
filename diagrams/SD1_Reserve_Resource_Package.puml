@@ -1,0 +1,294 @@
+@startuml SD1_Reserve_Resource_Package
+title SD1 - Reserve Resource Package for a Task (incl. Race Condition) - Group 13
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+skinparam ParticipantPadding 4
+skinparam BoxPadding 6
+hide footbox
+
+actor "Dispatcher A" as DA
+boundary "screenA :\nEventStatusScreen" as SA
+control "dispCtrlA :\nDispatcherClientController" as CA
+control "clientA :\nCrisisSyncClient" as NA
+actor "Dispatcher B" as DB
+boundary "screenB :\nEventStatusScreen" as SB
+control "dispCtrlB :\nDispatcherClientController" as CB
+control "clientB :\nCrisisSyncClient" as NB
+actor "Field Commander" as FC
+boundary "fcScreen :\nEventStatusScreen" as SF
+control "fcCtrl :\nFieldCommanderClientController" as CF
+control "fcClient :\nCrisisSyncClient" as NF
+control "server :\nCrisisSyncServer" as SRV
+control "resCtrl :\nReservationController" as RC
+control "taskCtrl :\nTaskController" as TC
+control "dbManager :\nDBConnectionManager" as DBM
+control "eventDAO :\nEventDAO" as EDAO
+control "taskDAO :\nTaskDAO" as TDAO
+control "resourceDAO :\nResourceDAO" as RDAO
+control "assignmentDAO :\nAssignmentDAO" as ADAO
+control "audit :\nAuditController" as AUD
+
+'======================================================================
+alt a) Successful reservation - every package resource is AVAILABLE
+'======================================================================
+  DA -> SA : onReserveClicked()
+  activate SA
+  SA -> CA : reservePackage(taskId, resourceIds)
+  activate CA
+  CA -> NA : sendRequest(request)
+  activate NA
+  note right of NA : request.type = RESERVE_PACKAGE\nsent with AbstractClient.sendToServer()
+  NA ->> SRV : handleMessageFromClient(msg, client)
+  deactivate NA
+  deactivate CA
+  deactivate SA
+  activate SRV
+  SRV -> RC : reservePackage(taskId, resourceIds, dispatcherId)
+  activate RC
+  RC -> RC : tryReserve(taskId, resourceIds, dispatcherId)
+  activate RC
+  RC -> DBM : getConnection()
+  activate DBM
+  DBM --> RC : conn
+  deactivate DBM
+  RC -> DBM : beginTransaction(conn)
+  RC -> TDAO : findById(taskId)
+  activate TDAO
+  TDAO --> RC : task
+  deactivate TDAO
+  note right of RC : Fixed lock order (NFR-11):\nevent -> task -> resources by ascending ID
+  RC -> EDAO : lockForUpdate(conn, eventId)
+  activate EDAO
+  EDAO --> RC : event
+  deactivate EDAO
+  RC -> TDAO : lockForUpdate(conn, taskId)
+  activate TDAO
+  TDAO --> RC : task [READY]
+  deactivate TDAO
+  RC -> RDAO : lockForUpdate(conn, sortedIds)
+  activate RDAO
+  note right of RDAO : SELECT ... FROM resource\nWHERE id IN (...) ORDER BY id\nFOR UPDATE  (pessimistic lock)
+  RDAO --> RC : resources [all AVAILABLE]
+  deactivate RDAO
+  loop for each resource in the package
+    RC -> RDAO : updateStatus(conn, resourceId, status = RESERVED)
+    create entity "assignment :\nAssignment" as ASG
+    RC -> ASG : <<create>>
+    RC -> ADAO : insert(conn, assignment)
+  end
+  RC -> TDAO : updateStatus(conn, taskId, status = ACTIVE)
+  RC -> DBM : commit(conn)
+  RC --> RC : true
+  deactivate RC
+  RC -> AUD : record(userId, action, targetType, targetId, details)
+  RC --> SRV : response [success]
+  deactivate RC
+  SRV ->> NA : handleMessageFromServer(msg)
+  activate NA
+  NA -> SA : onResponse(response)
+  activate SA
+  SA -> SA : showMessage(message)
+  note right of SA : green confirmation
+  deactivate SA
+  deactivate NA
+  create entity "update :\nUpdateNotification" as UPD
+  SRV -> UPD : <<create>>
+  SRV -> SRV : broadcastUpdate(update)
+  activate SRV
+  SRV -> SRV : sendToAllClients(msg)
+  deactivate SRV
+  par live update to every connected client
+    SRV ->> NA : handleMessageFromServer(msg)
+    NA -> SA : onUpdate(update)
+  else
+    SRV ->> NB : handleMessageFromServer(msg)
+    NB -> SB : onUpdate(update)
+  else
+    SRV ->> NF : handleMessageFromServer(msg)
+    NF -> SF : onUpdate(update)
+  end
+  deactivate SRV
+
+'======================================================================
+else b) Race Condition - A and B reserve packages that share resource R at the same moment
+'======================================================================
+  par both Dispatchers click Reserve at the same moment
+    DA -> SA : onReserveClicked()
+    SA -> CA : reservePackage(taskId, resourceIds)
+    CA -> NA : sendRequest(request)
+    NA ->> SRV : handleMessageFromClient(msg, client)
+  else
+    DB -> SB : onReserveClicked()
+    SB -> CB : reservePackage(taskId, resourceIds)
+    CB -> NB : sendRequest(request)
+    NB ->> SRV : handleMessageFromClient(msg, client)
+  end
+  activate SRV
+  note over SRV, RC : OCSF serves each client on its own thread:\nthread A (Dispatcher A) and thread B (Dispatcher B) run in parallel
+  SRV -> RC : reservePackage(taskId, resourceIds, dispatcherId)
+  activate RC
+  note right of RC : thread A (connA):\nlocks event -> task (NFR-11),\nthen locks resources by ascending ID
+  RC -> DBM : beginTransaction(conn)
+  RC -> RDAO : lockForUpdate(conn, sortedIds)
+  RDAO --> RC : resources [R AVAILABLE] - thread A holds the row lock on R
+  SRV -> RC : reservePackage(taskId, resourceIds, dispatcherId)
+  note right of RC : thread B (connB):\nlocks its event -> task (NFR-11),\nthen attempts to lock resources by ascending ID
+  RC -> DBM : beginTransaction(conn)
+  RC -> RDAO : lockForUpdate(conn, sortedIds)
+  note right of RDAO : thread B is BLOCKED on the\nrow lock of R until thread A ends
+  alt thread A: all locked resources are AVAILABLE (wins the lock)
+    loop for each resource in package A
+      RC -> RDAO : updateStatus(conn, resourceId, status = RESERVED)
+      RC -> ADAO : insert(conn, assignment)
+    end
+    RC -> TDAO : updateStatus(conn, taskId, status = ACTIVE)
+    RC -> DBM : commit(conn)
+    note right of DBM : commit releases the lock on R
+    RC -> AUD : record(userId, action, targetType, targetId, details)
+    RC --> SRV : response [success]
+    SRV ->> NA : handleMessageFromServer(msg)
+    NA -> SA : onResponse(response)
+    SA -> SA : showMessage(message)
+  else thread B: lock acquired after A's commit, R is already RESERVED
+    RDAO --> RC : resources [R RESERVED]
+    RC -> DBM : rollback(conn)
+    note right of DBM : all-or-nothing (FR-02, FR-12):\nnone of B's resources is reserved,\ntask B stays READY
+    RC -> AUD : record(userId, action, targetType, targetId, details)
+    RC --> SRV : response [conflict: R unavailable]
+    SRV ->> NB : handleMessageFromServer(msg)
+    NB -> SB : onResponse(response)
+    SB -> SB : showMessage(message)
+    note right of SB : Conflict Alert (red)
+  end
+  deactivate RC
+  SRV -> SRV : broadcastUpdate(update)
+  SRV -> SRV : sendToAllClients(msg)
+  par every screen is refreshed to the state stored in the DB
+    SRV ->> NA : handleMessageFromServer(msg)
+    NA -> SA : onUpdate(update)
+  else
+    SRV ->> NB : handleMessageFromServer(msg)
+    NB -> SB : onUpdate(update)
+  else
+    SRV ->> NF : handleMessageFromServer(msg)
+    NF -> SF : onUpdate(update)
+  end
+  deactivate SRV
+
+'======================================================================
+else c) Dispatcher cancels a task
+'======================================================================
+  DA -> SA : onCancelTaskClicked()
+  activate SA
+  SA -> CA : cancelTask(taskId, confirmed = false)
+  CA -> NA : sendRequest(request)
+  NA ->> SRV : handleMessageFromClient(msg, client)
+  activate SRV
+  SRV -> TC : cancelTask(taskId, confirmed = false, dispatcherId)
+  activate TC
+  TC -> DBM : getConnection()
+  DBM --> TC : conn
+  TC -> TDAO : findDependents(taskId)
+  TDAO --> TC : dependents
+  TC --> SRV : response [confirmation needed: N dependent tasks]
+  deactivate TC
+  SRV ->> NA : handleMessageFromServer(msg)
+  NA -> SA : onResponse(response)
+  SA -> SA : showMessage(message)
+  note right of SA : prompt: "N dependent tasks will also be cancelled - confirm?"
+  deactivate SRV
+  opt Dispatcher confirms
+    note over DA, SA : Dispatcher confirms cancellation
+    SA -> CA : cancelTask(taskId, confirmed = true)
+    CA -> NA : sendRequest(request)
+    NA ->> SRV : handleMessageFromClient(msg, client)
+    activate SRV
+    SRV -> TC : cancelTask(taskId, confirmed = true, dispatcherId)
+    activate TC
+    TC -> DBM : beginTransaction(conn)
+    TC -> EDAO : lockForUpdate(conn, eventId)
+    TC -> TDAO : lockForUpdate(conn, taskId)
+    TC -> TDAO : findDependents(taskId)
+    TDAO --> TC : dependents
+    loop for the task and each dependent task that is not final
+      TC -> TC : releaseTaskResources(conn, taskId)
+      activate TC
+      TC -> ADAO : findOpenByTask(conn, taskId)
+      ADAO --> TC : openAssignments
+      loop for each open assignment
+        TC -> RDAO : updateStatus(conn, resourceId, status = AVAILABLE)
+        TC -> ADAO : close(conn, assignmentId, endTime)
+      end
+      deactivate TC
+      TC -> TDAO : updateStatus(conn, taskId, status = CANCELLED)
+    end
+    TC -> DBM : commit(conn)
+    TC -> AUD : record(userId, action, targetType, targetId, details)
+    TC --> SRV : response [cancelled]
+    deactivate TC
+    SRV ->> NA : handleMessageFromServer(msg)
+    NA -> SA : onResponse(response)
+    SRV -> SRV : broadcastUpdate(update)
+    SRV -> SRV : sendToAllClients(msg)
+    note right of SRV : live update to all connected\nclients, as in scenario a)
+    deactivate SRV
+  end
+  deactivate SA
+
+'======================================================================
+else d) Field Commander reports task completion and resources are released
+'======================================================================
+  FC -> SF : onReportCompletionClicked()
+  activate SF
+  SF -> CF : reportTaskCompletion(taskId)
+  CF -> NF : sendRequest(request)
+  NF ->> SRV : handleMessageFromClient(msg, client)
+  activate SRV
+  SRV -> TC : reportCompletion(taskId, commanderId)
+  activate TC
+  TC -> TC : isAssignedCommander(taskId, commanderId)
+  TC -> TC : hasMissingResource(taskId)
+  alt not the Field Commander assigned to the task (FR-05)
+    TC --> SRV : response [rejected: not assigned]
+  else a package resource is missing and was not waived (FR-14)
+    TC --> SRV : response [rejected: missing resource]
+  else assigned Field Commander and the package is complete
+    TC -> DBM : getConnection()
+    DBM --> TC : conn
+    TC -> DBM : beginTransaction(conn)
+    TC -> EDAO : lockForUpdate(conn, eventId)
+    TC -> TDAO : lockForUpdate(conn, taskId)
+    TC -> TC : releaseTaskResources(conn, taskId)
+    note right of TC : same steps as in scenario c):\nresources -> AVAILABLE,\nassignments closed with endTime
+    TC -> TDAO : updateStatus(conn, taskId, status = COMPLETED)
+    TC -> TC : promoteDependentTasks(conn, taskId)
+    activate TC
+    TC -> TDAO : findDependents(taskId)
+    TDAO --> TC : dependents
+    loop for each dependent task
+      TC -> TDAO : findPrerequisites(taskId)
+      TDAO --> TC : prerequisites
+      opt all prerequisites are COMPLETED
+        TC -> TDAO : updateStatus(conn, taskId, status = READY)
+      end
+    end
+    deactivate TC
+    TC -> DBM : commit(conn)
+    TC -> AUD : record(userId, action, targetType, targetId, details)
+    TC --> SRV : response [completed]
+  end
+  deactivate TC
+  SRV ->> NF : handleMessageFromServer(msg)
+  NF -> SF : onResponse(response)
+  SF -> SF : showMessage(message)
+  opt task completed
+    SRV -> SRV : broadcastUpdate(update)
+    SRV -> SRV : sendToAllClients(msg)
+    note right of SRV : live update to all connected\nclients, as in scenario a)
+  end
+  deactivate SRV
+  deactivate SF
+end
+@enduml
