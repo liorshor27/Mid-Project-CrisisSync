@@ -1,4 +1,4 @@
-@startuml AD2_SLA_Report
+@startuml
 title Generate and View SLA Report
 skinparam shadowing false
 skinparam defaultFontName Arial
