@@ -1,0 +1,143 @@
+@startuml SD2_SLA_Report
+title SD2 - Generate and View SLA Reports (monthly + on demand) - Group 13
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 260
+hide footbox
+
+actor "System Administrator" as ADM
+boundary "reportScreen :\nReportScreen" as RS
+control "adminCtrl :\nAdminClientController" as AC
+control "client :\nCrisisSyncClient" as CL
+boundary "scheduler :\nReportScheduler" as SCH
+control "server :\nCrisisSyncServer" as SRV
+control "reportCtrl :\nReportController" as RPC
+control "auth :\nAuthenticationController" as AUTH
+control "slaGenerator :\nSLAReportGenerator" as GEN
+control "eventDAO :\nEventDAO" as EDAO
+control "taskDAO :\nTaskDAO" as TDAO
+control "reportDAO :\nReportDAO" as RDAO
+
+'======================================================================
+loop 1) Automatic generation at the end of every calendar month (FR-08, FR-09)
+'======================================================================
+  SCH -> SCH : onEndOfMonth(month)
+  activate SCH
+  note right of SCH : triggered by the system clock\nwhen calendar month M ends
+  SCH -> RPC : generateMonthlyReports(month)
+  activate RPC
+  RPC -> GEN : generate(month)
+  activate GEN
+  GEN -> GEN : loadClosedEvents(month)
+  activate GEN
+  GEN -> EDAO : findClosedInMonth(month)
+  activate EDAO
+  EDAO --> GEN : events
+  deactivate EDAO
+  deactivate GEN
+  GEN -> GEN : loadCompletedTasks(events)
+  activate GEN
+  GEN -> TDAO : findCompletedByEvents(eventIds)
+  activate TDAO
+  TDAO --> GEN : tasks
+  deactivate TDAO
+  deactivate GEN
+  GEN -> GEN : filterIncludedEvents(events, tasks)
+  note right of GEN : keep only events finally closed in M\nwith at least one COMPLETED task;\ncancelled events and tasks are ignored (A-1)
+  loop for each included event
+    GEN -> GEN : calculateHandlingTime(event, tasks)
+    note right of GEN : event opening -> completion\nof its last COMPLETED task
+  end
+  GEN -> GEN : calculateAveragePerType(times)
+  loop for each event type
+    GEN -> GEN : formatHhMm(time)
+  end
+  create entity "report :\nSLAReport" as REP
+  GEN -> REP : <<create>>
+  GEN --> RPC : report
+  deactivate GEN
+  RPC -> RPC : storeReport(report)
+  activate RPC
+  RPC -> RDAO : insert(report)
+  activate RDAO
+  note right of RDAO : stored read-only (NFR-08)
+  deactivate RDAO
+  deactivate RPC
+  note right of RPC : the Utilization report is generated\nthe same way by UtilizationReportGenerator\n(not shown - outside this sequence)
+  deactivate RPC
+  deactivate SCH
+end
+
+'======================================================================
+loop 2) Administrator views SLA reports of different months
+'======================================================================
+  ADM -> RS : onRequestReportClicked()
+  activate RS
+  note right of RS : selectedMonth = month chosen\nby the Administrator
+  RS -> AC : requestReport(type, month)
+  activate AC
+  note right of AC : type = SLA
+  AC -> CL : sendRequest(request)
+  activate CL
+  note right of CL : request.type = GET_REPORT
+  CL ->> SRV : handleMessageFromClient(msg, client)
+  deactivate CL
+  deactivate AC
+  deactivate RS
+  activate SRV
+  SRV -> RPC : requestReport(type, month, requesterId)
+  activate RPC
+  RPC -> AUTH : isAuthorized(userId, role)
+  activate AUTH
+  note right of AUTH : role = SYSTEM_ADMINISTRATOR
+  AUTH --> RPC : authorized
+  deactivate AUTH
+  alt requester is not the System Administrator (FR-11)
+    RPC --> SRV : response [access denied, no report data]
+  else authorized System Administrator
+    RPC -> RPC : isPastMonth(month)
+    alt selected month has not ended yet
+      RPC --> SRV : response [rejected: "Select a past month"]
+    else past month
+      RPC -> RDAO : find(type, month)
+      activate RDAO
+      RDAO --> RPC : storedReport
+      deactivate RDAO
+      alt report already stored (generated at month end or by an earlier request)
+        note right of RPC : the stored report is returned as is
+      else no stored report - on-demand generation (FR-10)
+        RPC -> GEN : generate(month)
+        activate GEN
+        note right of GEN : same internal steps as in 1);\ncreates a new SLAReport for the month
+        GEN --> RPC : report
+        deactivate GEN
+        RPC -> RPC : storeReport(report)
+        activate RPC
+        RPC -> RDAO : insert(report)
+        activate RDAO
+        deactivate RDAO
+        deactivate RPC
+      end
+      RPC --> SRV : response [report]
+    end
+  end
+  deactivate RPC
+  SRV ->> CL : handleMessageFromServer(msg)
+  deactivate SRV
+  activate CL
+  CL -> RS : onResponse(response)
+  deactivate CL
+  activate RS
+  alt report contains closed events
+    RS -> RS : showSLAReport(report)
+    note right of RS : average time per event type\nin hh:mm format (NFR-09)
+  else report is empty
+    RS -> RS : showMessage(message)
+    note right of RS : "No closed events in this month"
+  else request rejected
+    RS -> RS : showMessage(message)
+  end
+  deactivate RS
+end
+@enduml
